@@ -82,6 +82,15 @@ jobs:
             OLD_BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST")
             /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${{ inputs.bundle_id }}" "$PLIST"
             echo "Bundle ID: $OLD_BID -> ${{ inputs.bundle_id }}"
+
+            # Patch filter plist to match new bundle ID
+            FILTER_PLIST="$(find extracted_deb -name '*.plist' -path '*/Library/MobileSubstrate/*' | head -1)"
+            if [ -n "$FILTER_PLIST" ]; then
+              /usr/libexec/PlistBuddy -c "Delete :Filter:Bundles" "$FILTER_PLIST" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :Filter:Bundles array" "$FILTER_PLIST"
+              /usr/libexec/PlistBuddy -c "Add :Filter:Bundles:0 string ${{ inputs.bundle_id }}" "$FILTER_PLIST"
+              echo "Filter plist patched to target: ${{ inputs.bundle_id }}"
+            fi
           fi
 
           # Re-pack IPA
