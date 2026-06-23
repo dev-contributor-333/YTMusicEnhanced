@@ -57,9 +57,11 @@ jobs:
       - name: Inject into IPA
         run: |
           mkdir -p output
-          # Extract .deb to get dylib
           cd Tweaks/YTMusicEnhanced
-          dpkg-deb -x packages/*.deb extracted_deb
+          # Extract .deb (macOS doesn't have dpkg-deb; use ar+tar)
+          mkdir -p extracted_deb
+          DEB=$(ls packages/*.deb | head -1)
+          (cd extracted_deb && ar x ../$DEB && tar xf data.tar.*)
 
           # Copy dylib to IPA Frameworks
           DYLIB=$(find extracted_deb -name "*.dylib" | head -1)
