@@ -1,0 +1,79 @@
+name: Build YTMusicEnhanced
+
+on:
+  workflow_dispatch:
+    inputs:
+      decrypted_ipa_url:
+        description: "Direct URL of the decrypted YouTube Music IPA"
+        required: true
+        type: string
+      bundle_id:
+        description: "Custom bundle ID (empty = keep original)"
+        default: ""
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Dependencies
+        run: brew install ldid make
+
+      - name: Setup Theos
+        run: |
+          git clone --depth 1 https://github.com/theos/theos.git ${{ github.workspace }}/theos
+
+      - name: Download YouTube Music IPA
+        run: |
+          mkdir -p input
+          wget -q "${{ inputs.decrypted_ipa_url }}" -O input/YouTubeMusic.ipa
+          echo "IPA downloaded: $(ls -lh input/YouTubeMusic.ipa | awk '{print $5}')"
+          # Extract IPA
+          unzip -qo input/YouTubeMusic.ipa -d input/extracted
+
+      - name: Build Tweak
+        run: |
+          cd Tweaks/YTMusicEnhanced
+          export THEOS=${{ github.workspace }}/theos
+          make clean && make package THEOS_PACKAGE_SCHEME=rootless
+          echo "Tweak built: $(ls -lh packages/*.deb | awk '{print $5}')"
+
+      - name: Inject into IPA
+        run: |
+          mkdir -p output
+          # Extract .deb to get dylib
+          cd Tweaks/YTMusicEnhanced
+          dpkg-deb -x packages/*.deb extracted_deb
+
+          # Copy dylib to IPA Frameworks
+          DYLIB=$(find extracted_deb -name "*.dylib" | head -1)
+          cp "$DYLIB" ${{ github.workspace }}/input/extracted/Payload/YouTubeMusic.app/Frameworks/
+
+          # Copy CydiaSubstrate if needed
+          # For rootless, we inject directly
+
+          # Modify Info.plist for background audio
+          PLIST="${{ github.workspace }}/input/extracted/Payload/YouTubeMusic.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" "$PLIST" 2>/dev/null || true
+
+          # Change bundle ID if specified
+          if [ -n "${{ inputs.bundle_id }}" ]; then
+            OLD_BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST")
+            /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${{ inputs.bundle_id }}" "$PLIST"
+            echo "Bundle ID: $OLD_BID -> ${{ inputs.bundle_id }}"
+          fi
+
+          # Re-pack IPA
+          cd ${{ github.workspace }}/input/extracted
+          zip -qr ${{ github.workspace }}/output/YTMusicEnhanced.ipa Payload/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: YTMusicEnhanced
+          path: output/YTMusicEnhanced.ipa
