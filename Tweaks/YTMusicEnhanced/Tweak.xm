@@ -1,6 +1,6 @@
-# YTMusicEnhanced — Manual tweaks for YouTube Music
-# Background playback + Ad removal + Download interception
-# No third-party code — written from scratch
+// YTMusicEnhanced — Manual tweaks for YouTube Music
+// Background playback + Ad removal + Download interception
+// No third-party code — written from scratch
 
 %config(generator=internal)
 
