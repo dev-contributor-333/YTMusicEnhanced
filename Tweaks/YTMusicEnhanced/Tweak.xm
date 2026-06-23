@@ -476,8 +476,6 @@ static CFStringRef (*orig_SecTaskCopyValueForEntitlement)(void);
     return result;
 }
 
-%end
-
 // ===================================================================
 // CTOR — runs when dylib is loaded
 // ===================================================================
