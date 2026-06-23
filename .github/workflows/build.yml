@@ -29,8 +29,10 @@ jobs:
 
       - name: Setup Theos
         run: |
-          git clone --depth 1 https://github.com/theos/theos.git ${{ github.workspace }}/theos
+          git clone --depth 1 --recurse-submodules https://github.com/theos/theos.git ${{ github.workspace }}/theos
+          # dm.pl lives in a submodule (vendor/dm.pl)
           ls -la ${{ github.workspace }}/theos/bin/dm.pl
+          file ${{ github.workspace }}/theos/vendor/dm.pl/dm.pl
 
       - name: Download YouTube Music IPA
         run: |
