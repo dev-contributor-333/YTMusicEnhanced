@@ -1,0 +1,9 @@
+Package: com.shaisab.ytmusicenhanced
+Name: YTMusicEnhanced
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: YouTube Music tweak — ad removal, background playback, music download
+Maintainer: Shaisab Mistry <shaisabmistry@gmail.com>
+Author: Shaisab Mistry
+Section: Tweaks
+Depends: mobilesubstrate
