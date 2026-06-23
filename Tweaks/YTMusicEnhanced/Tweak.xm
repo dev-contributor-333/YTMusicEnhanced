@@ -1,6 +1,6 @@
-# YTMusicEnhanced — Manual tweaks for YouTube Music
-# Background playback + Ad removal + Download interception + Google Sign-In bypass
-# No third-party code — written from scratch
+// YTMusicEnhanced — Manual tweaks for YouTube Music
+// Background playback + Ad removal + Download interception + Google Sign-In bypass
+// No third-party code — written from scratch
 
 %config(generator=internal)
 
@@ -237,6 +237,7 @@ static void init_downloads() {
         [urlStr containsString:@"mime=audio"]) {
         
         NSString *title = @"Unknown";
+        (void)title; // suppress unused warning — title extraction above
         // Try to extract title from headers
         NSDictionary *headers = [[dataTask originalRequest] allHTTPHeaderFields];
         NSString *ref = headers[@"Referer"];
@@ -459,8 +460,8 @@ didCompleteWithError:(NSError *)error {
 
 // Hook SecTask for code-signing bypass
 // (Google checks if the app is ad-hoc signed vs App Store)
-static void (*orig_SecTaskCopySigningIdentifier)(void);
-static CFStringRef (*orig_SecTaskCopyValueForEntitlement)(void);
+// SecTaskRef is a private type — define it manually
+typedef struct __SecTask *SecTaskRef;
 
 %hookf(CFTypeRef, SecTaskCopyValueForEntitlement, SecTaskRef task, CFStringRef entitlement, CFErrorRef *error) {
     // Returning NULL for certain entitlements can bypass checks
