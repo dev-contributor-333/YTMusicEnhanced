@@ -360,6 +360,17 @@ didCompleteWithError:(NSError *)error {
     %orig(configuration, viewController, wrappedCallback);
 }
 
+// Disable sharedInstance tamper detection
++ (id)sharedInstance {
+    id instance = %orig;
+    return instance;
+}
+
+// Allow keychain access in sandbox
+- (BOOL)hasPreviousSignIn {
+    return %orig;
+}
+
 %end
 
 // Hook GIDAuthentication for token refresh bypass
@@ -424,22 +435,6 @@ didCompleteWithError:(NSError *)error {
             return NO;
         }
     }
-    return %orig;
-}
-
-%end
-
-// Disable GIDSignIn sharedInstance tamper detection
-%hook GIDSignIn
-
-+ (id)sharedInstance {
-    id instance = %orig;
-    // Ensure instance is valid even if integrity check would fail
-    return instance;
-}
-
-// Allow sandbox extension bypass for keychain
-- (BOOL)hasPreviousSignIn {
     return %orig;
 }
 
