@@ -320,24 +320,18 @@ didCompleteWithError:(NSError *)error {
           additionalScopes:(NSArray *)scopes
                     callback:(void (^)(id user, NSError *error))callback {
     
-    // Intercept the callback to strip integrity errors
+    // Aggressive error stripping: intercept callback and suppress ALL errors
     void (^wrappedCallback)(id, NSError *) = ^(id user, NSError *error) {
         if (error) {
-            NSInteger code = [error code];
-            NSString *domain = [error domain];
-            NSLog(@"GIDSignIn error intercepted: domain=%@ code=%ld desc=%@", 
-                  domain, (long)code, [error localizedDescription]);
+            NSLog(@"GIDSignIn error caught: domain=%@ code=%ld desc=%@",
+                  [error domain], (long)[error code], [error localizedDescription]);
             
-            // Common sideloading error codes - force success if it's an integrity check failure
-            if ([domain containsString:@"com.google.GIDSignIn"] || 
-                [domain containsString:@"com.google.HTTPStatus"]) {
-                
-                // Try to proceed anyway by calling the original with a success callback
-                // Some versions will succeed on retry after bypassing checks
-                if (user) {
-                    callback(user, nil);
-                    return;
-                }
+            // ALWAYS suppress errors — Google can't verify sideloaded apps
+            // but the auth token is still valid
+            if (user) {
+                NSLog(@"GIDSignIn: suppressing error, returning user anyway");
+                callback(user, nil);
+                return;
             }
         }
         callback(user, error);
@@ -346,14 +340,15 @@ didCompleteWithError:(NSError *)error {
     %orig(configuration, viewController, hint, scopes, wrappedCallback);
 }
 
-// Handle initial sign-in attempt - bypass pre-check failures
 - (void)signInWithConfiguration:(id)configuration
     presentingViewController:(UIViewController *)viewController
                     callback:(void (^)(id user, NSError *error))callback {
     
     void (^wrappedCallback)(id, NSError *) = ^(id user, NSError *error) {
-        if (error) {
-            NSLog(@"GIDSignIn (2-arg) error: %@", [error localizedDescription]);
+        if (error && user) {
+            NSLog(@"GIDSignIn (2-arg): suppressing error, returning user anyway");
+            callback(user, nil);
+            return;
         }
         callback(user, error);
     };
@@ -454,6 +449,73 @@ didCompleteWithError:(NSError *)error {
 
 - (id)authentication {
     return %orig;
+}
+
+%end
+
+// Hook ASWebAuthenticationSession — Google's OAuth uses this
+// The "can't confirm it's safe" error is shown IN the web session
+%hook ASWebAuthenticationSession
+
+- (id)initWithURL:(NSURL *)URL
+ callbackURLScheme:(NSString *)callbackURLScheme
+ completionHandler:(void (^)(NSURL *callbackURL, NSError *error))completionHandler {
+    
+    void (^wrappedCompletion)(NSURL *, NSError *) = ^(NSURL *callbackURL, NSError *error) {
+        if (error) {
+            NSLog(@"ASWebAuth error intercepted: %@", error);
+            // Try to extract the authorization code from the error URL
+            // Google sometimes returns error in the URL fragment
+        }
+        if (callbackURL) {
+            NSLog(@"ASWebAuth callback URL: %@", callbackURL);
+            // Strip error params from the callback URL
+            NSString *urlStr = [callbackURL absoluteString];
+            if ([urlStr containsString:@"error=access_denied"]) {
+                // Remove error params, keep the code if present
+                NSURLComponents *comps = [NSURLComponents componentsWithURL:callbackURL 
+                                                    resolvingAgainstBaseURL:NO];
+                NSMutableArray *clean = [NSMutableArray array];
+                for (NSURLQueryItem *item in comps.queryItems) {
+                    if (![item.name isEqualToString:@"error"] &&
+                        ![item.name isEqualToString:@"error_description"]) {
+                        [clean addObject:item];
+                    }
+                }
+                comps.queryItems = clean;
+                NSLog(@"ASWebAuth: stripped error from callback URL -> %@", comps.URL);
+                completionHandler(comps.URL, nil);
+                return;
+            }
+        }
+        completionHandler(callbackURL, error);
+    };
+    
+    return %orig(URL, callbackURLScheme, wrappedCompletion);
+}
+
+%end
+
+// Hook OIDAuthorizationService — Google's OAuth library
+%hook OIDAuthorizationService
+
++ (void)presentAuthorizationRequest:(id)request
+    presentingViewController:(UIViewController *)viewController
+                    callback:(void (^)(id response, NSError *error))callback {
+    
+    void (^wrappedCallback)(id, NSError *) = ^(id response, NSError *error) {
+        if (error) {
+            NSLog(@"OIDAuth error: %@", error);
+            // Suppress OAuth errors — the auth code is still valid
+            if (response) {
+                callback(response, nil);
+                return;
+            }
+        }
+        callback(response, error);
+    };
+    
+    %orig(request, viewController, wrappedCallback);
 }
 
 %end
