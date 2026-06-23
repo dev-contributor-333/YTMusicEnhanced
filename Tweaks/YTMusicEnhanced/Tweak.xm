@@ -4,6 +4,9 @@
 
 %config(generator=internal)
 
+// Static storage for imported OAuth token (populated by %ctor)
+static NSString *_importedToken = nil;
+
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
@@ -364,6 +367,10 @@ didCompleteWithError:(NSError *)error {
 
 // Allow keychain access in sandbox
 - (BOOL)hasPreviousSignIn {
+    // Check for imported token first
+    if (_importedToken) {
+        return YES;
+    }
     return %orig;
 }
 
@@ -545,6 +552,28 @@ typedef struct __SecTask *SecTaskRef;
 
 %ctor {
     NSLog(@"YTMusicEnhanced loaded — bg play + no ads + downloads + sign-in bypass");
+    
+    // Check for injected token file
+    NSString *tokenPath = [[NSBundle mainBundle] pathForResource:@"google_token" ofType:@"json"];
+    if (!tokenPath) {
+        // Also check Documents directory
+        NSArray *docDirs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        if (docDirs.count > 0) {
+            tokenPath = [docDirs[0] stringByAppendingPathComponent:@"google_token.json"];
+        }
+    }
+    
+    if (tokenPath && [[NSFileManager defaultManager] fileExistsAtPath:tokenPath]) {
+        NSData *data = [NSData dataWithContentsOfFile:tokenPath];
+        if (data) {
+            NSError *err = nil;
+            NSDictionary *tokenDict = [NSJSONSerialization JSONObjectWithData:data options:0 error:&err];
+            if (tokenDict && tokenDict[@"refresh_token"]) {
+                _importedToken = tokenDict[@"refresh_token"];
+                NSLog(@"YTMusicEnhanced: loaded refresh token (auto sign-in ready)");
+            }
+        }
+    }
     
     // Add download observer notification
     [[NSNotificationCenter defaultCenter] addObserverForName:@"YTMusicEnhanced"
