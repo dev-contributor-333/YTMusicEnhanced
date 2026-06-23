@@ -33,6 +33,11 @@ jobs:
           # dm.pl lives in a submodule (vendor/dm.pl)
           ls -la ${{ github.workspace }}/theos/bin/dm.pl
           file ${{ github.workspace }}/theos/vendor/dm.pl/dm.pl
+          # Symlink Xcode SDK (theos doesn't ship with SDKs, Makefile expects it)
+          mkdir -p ${{ github.workspace }}/theos/sdks
+          ln -sf /Applications/Xcode_15.4.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS17.5.sdk \
+            ${{ github.workspace }}/theos/sdks/iPhoneOS17.5.sdk
+          ls -la ${{ github.workspace }}/theos/sdks/
 
       - name: Download YouTube Music IPA
         run: |
