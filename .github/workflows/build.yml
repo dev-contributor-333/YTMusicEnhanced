@@ -64,8 +64,10 @@ jobs:
           (cd extracted_deb && ar x ../$DEB && tar xf data.tar.*)
 
           # Copy dylib to IPA Frameworks
+          FW_DIR=${{ github.workspace }}/input/extracted/Payload/YouTubeMusic.app/Frameworks
+          mkdir -p "$FW_DIR"
           DYLIB=$(find extracted_deb -name "*.dylib" | head -1)
-          cp "$DYLIB" ${{ github.workspace }}/input/extracted/Payload/YouTubeMusic.app/Frameworks/
+          cp "$DYLIB" "$FW_DIR/"
 
           # Copy CydiaSubstrate if needed
           # For rootless, we inject directly
