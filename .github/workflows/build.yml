@@ -21,11 +21,16 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install Dependencies
-        run: brew install ldid make
+        run: |
+          brew install ldid make
+          # Use GNU make (gmake) — Xcode's make requires dm.pl which breaks theos packaging
+          echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
+          which make && make --version
 
       - name: Setup Theos
         run: |
           git clone --depth 1 https://github.com/theos/theos.git ${{ github.workspace }}/theos
+          ls -la ${{ github.workspace }}/theos/bin/dm.pl
 
       - name: Download YouTube Music IPA
         run: |
