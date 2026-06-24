@@ -4,14 +4,15 @@
 
 %config(generator=internal)
 
-// Static storage for imported OAuth token (populated by %ctor)
-static NSString *_importedToken = nil;
-
+#import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+
+// Static storage for imported OAuth token (populated by %ctor)
+static NSString *_importedToken = nil;
 
 // ===================================================================
 // 1. BACKGROUND PLAYBACK
@@ -499,6 +500,90 @@ didCompleteWithError:(NSError *)error {
     };
     
     return %orig(URL, callbackURLScheme, wrappedCompletion);
+}
+
+%end
+
+// ===================================================================
+// Hook SSOFolsomEnrollPublicKeyServiceImpl — the app integrity/enrollment check
+// This is what Google uses to verify the app is "safe" (App Store, valid bundle, etc.)
+// By forcing the enrollment completion to always succeed, we bypass the attestation
+// ===================================================================
+
+%hook SSOFolsomEnrollPublicKeyServiceImpl
+
+- (void)enrollWithPublicKeyResponse:(id)response
+                          identity:(id)identity
+                     sessionService:(id)sessionService
+                    loggerDelegate:(id)loggerDelegate
+                        completion:(void (^)(id result, NSError *error))completion {
+
+    void (^bypassCompletion)(id, NSError *) = ^(id result, NSError *error) {
+        if (error) {
+            NSLog(@"SSOFolsomEnroll: enrollment failed — BYPASSING (error: %@)", error);
+            completion(result, nil);  // strip the error, pretend it succeeded
+            return;
+        }
+        completion(result, error);
+    };
+
+    %orig(response, identity, sessionService, loggerDelegate, bypassCompletion);
+}
+
+%end
+
+// ===================================================================
+// Hook SSOService — intercept the OAuth callback processing
+// continueAuthenticationForURL is called after the web auth returns
+// If the URL contains an error from Google's server, modify it
+// ===================================================================
+
+%hook SSOService
+
+- (void)continueAuthenticationForURL:(NSURL *)url
+                   externalAuthState:(id)externalAuthState {
+    
+    NSString *urlStr = [url absoluteString];
+    
+    if ([urlStr containsString:@"error="] ||
+        [urlStr containsString:@"access_denied"] ||
+        [urlStr containsString:@"cannot_sign_in"]) {
+        
+        NSLog(@"SSOService: error URL intercepted: %@", urlStr);
+        
+        // Try to convert to a success-looking callback URL by removing error params
+        NSURLComponents *comps = [NSURLComponents componentsWithURL:url 
+                                              resolvingAgainstBaseURL:NO];
+        NSMutableArray *clean = [NSMutableArray array];
+        for (NSURLQueryItem *item in comps.queryItems) {
+            if (![item.name isEqualToString:@"error"] &&
+                ![item.name isEqualToString:@"error_description"] &&
+                ![item.name isEqualToString:@"error_uri"] &&
+                ![item.name isEqualToString:@"state"]) {
+                [clean addObject:item];
+            }
+        }
+        
+        if (clean.count > 0) {
+            comps.queryItems = clean;
+            NSLog(@"SSOService: stripped error params -> %@", comps.URL);
+            // Call original with cleaned URL
+            %orig(comps.URL, externalAuthState);
+            return;
+        }
+    }
+    
+    %orig(url, externalAuthState);
+}
+
+- (BOOL)processNewlySignedInIdentity:(id *)outputIdentity
+                               error:(NSError **)error {
+    BOOL result = %orig;
+    if (!result && *error) {
+        NSLog(@"SSOService processNewlySigned error: %@", *error);
+        // Don't override — just log for debugging
+    }
+    return result;
 }
 
 %end
