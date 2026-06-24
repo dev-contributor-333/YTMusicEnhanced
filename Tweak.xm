@@ -4,14 +4,15 @@
 
 %config(generator=internal)
 
-// Static storage for imported OAuth token (populated by %ctor)
-static NSString *_importedToken = nil;
-
+#import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+
+// Static storage for imported OAuth token (populated by %ctor)
+static NSString *_importedToken = nil;
 
 // ===================================================================
 // 1. BACKGROUND PLAYBACK
